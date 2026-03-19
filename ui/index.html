@@ -653,11 +653,13 @@
    *  Configuration
    * ──────────────────────────────────── */
   const GATEWAY = window.location.origin;
+  const API_KEY = 'tts-siba-2026-xK9mP4wL7nQ2vR8j';
+  const AUTH_HEADERS = { 'Content-Type': 'application/json', 'X-API-Key': API_KEY };
 
   const ENGLISH_PROVIDERS = {
     'pocket-tts': {
       baseUrl: GATEWAY + '/en',
-      headers: { 'Content-Type': 'application/json' },
+      headers: AUTH_HEADERS,
       customVoices: [
         { id: 'eric', name: 'Eric (custom clone)' },
         { id: 'lowy', name: 'Lowy (custom clone)' },
@@ -665,17 +667,14 @@
     },
     'kokoro': {
       baseUrl: GATEWAY + '/en/kokoro',
-      headers: { 'Content-Type': 'application/json' },
+      headers: AUTH_HEADERS,
       customVoices: [],
     },
   };
 
   const VIETNAMESE_BACKEND = {
     baseUrl: GATEWAY + '/vi',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-API-Key': 'n7HMjL0s8xS8l9pwgCvPSzw4ssA6BdYmAJu--tJlfJ8',
-    },
+    headers: AUTH_HEADERS,
     customVoices: [],
   };
 
