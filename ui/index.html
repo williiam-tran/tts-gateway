@@ -659,6 +659,26 @@
         <input type="password" id="api-key-input" placeholder="Paste API key…" autocomplete="off" spellcheck="false">
         <span class="api-key-row__status" id="api-key-status">Saved</span>
       </div>
+      <div id="el-settings" style="display:none;margin-top:var(--sp-4)">
+        <div class="field__row" style="grid-template-columns:1fr 1fr 1fr 1fr;gap:var(--sp-3)">
+          <div>
+            <label class="field__label" for="el-model" style="font-size:var(--text-xs)">Model</label>
+            <div class="select-wrap"><select id="el-model"><option value="eleven_v3">v3 (best)</option><option value="eleven_turbo_v2_5">Turbo v2.5</option><option value="eleven_flash_v2_5">Flash v2.5</option></select></div>
+          </div>
+          <div class="el-v2-only" style="display:none">
+            <label class="field__label" style="font-size:var(--text-xs)">Stability <span id="el-stability-val">0.50</span></label>
+            <input type="range" id="el-stability" min="0" max="1" step="0.05" value="0.5" style="width:100%;accent-color:var(--accent)">
+          </div>
+          <div class="el-v2-only" style="display:none">
+            <label class="field__label" style="font-size:var(--text-xs)">Similarity <span id="el-similarity-val">0.75</span></label>
+            <input type="range" id="el-similarity" min="0" max="1" step="0.05" value="0.75" style="width:100%;accent-color:var(--accent)">
+          </div>
+          <div class="el-v2-only" style="display:none">
+            <label class="field__label" style="font-size:var(--text-xs)">Speed <span id="el-speed-val">1.0</span></label>
+            <input type="range" id="el-speed" min="0.25" max="4" step="0.05" value="1.0" style="width:100%;accent-color:var(--accent)">
+          </div>
+        </div>
+      </div>
     </div>
 
     <div class="field">
@@ -755,20 +775,36 @@
         var data = await resp.json();
         return data.voices.map(function (v) { return { id: v.voice_id, name: v.name }; });
       },
+      models: ['eleven_v3', 'eleven_turbo_v2_5', 'eleven_flash_v2_5'],
+      defaultModel: 'eleven_v3',
+      buildBody: function (text, model) {
+        var isV2 = model.includes('v2') || model.includes('turbo') || model.includes('flash');
+        var body = { text: text, model_id: model };
+        if (isV2) {
+          body.voice_settings = {
+            stability: parseFloat(document.getElementById('el-stability')?.value || '0.5'),
+            similarity_boost: parseFloat(document.getElementById('el-similarity')?.value || '0.75'),
+            speed: parseFloat(document.getElementById('el-speed')?.value || '1.0'),
+          };
+        }
+        return body;
+      },
       synthesize: async function (text, voiceId, apiKey) {
+        var model = document.getElementById('el-model')?.value || 'eleven_v3';
         var resp = await fetch('https://api.elevenlabs.io/v1/text-to-speech/' + encodeURIComponent(voiceId), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'xi-api-key': apiKey },
-          body: JSON.stringify({ text: text, model_id: 'eleven_multilingual_v2', voice_settings: { stability: 0.5, similarity_boost: 0.75, speed: 1.0 } })
+          body: JSON.stringify(this.buildBody(text, model))
         });
         if (!resp.ok) throw new Error('HTTP ' + resp.status);
         return resp.blob();
       },
       stream: async function (text, voiceId, apiKey) {
+        var model = document.getElementById('el-model')?.value || 'eleven_v3';
         var resp = await fetch('https://api.elevenlabs.io/v1/text-to-speech/' + encodeURIComponent(voiceId) + '/stream', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'xi-api-key': apiKey },
-          body: JSON.stringify({ text: text, model_id: 'eleven_multilingual_v2', voice_settings: { stability: 0.5, similarity_boost: 0.75, speed: 1.0 } })
+          body: JSON.stringify(this.buildBody(text, model))
         });
         if (!resp.ok) throw new Error('HTTP ' + resp.status);
         return resp;
@@ -873,6 +909,7 @@
 
   function updateApiKeyVisibility() {
     var provider = getProvider();
+    var elSettings = document.getElementById('el-settings');
     if (provider.type === 'external') {
       $apiKeyRow.classList.add('visible');
       var savedKey = getProviderApiKey(provider);
@@ -882,6 +919,14 @@
       $apiKeyRow.classList.remove('visible');
       $apiKeyInput.value = '';
     }
+    elSettings.style.display = ($provider.value === 'elevenlabs') ? '' : 'none';
+    updateElV2Controls();
+  }
+
+  function updateElV2Controls() {
+    var model = document.getElementById('el-model')?.value || '';
+    var isV2 = model.includes('v2') || model.includes('turbo') || model.includes('flash');
+    document.querySelectorAll('.el-v2-only').forEach(function (el) { el.style.display = isV2 ? '' : 'none'; });
   }
 
   function setStatus(text, level) {
@@ -1163,6 +1208,17 @@
         }
       }
     }, 600);
+  });
+
+  // ElevenLabs model change → toggle v2 settings
+  document.getElementById('el-model')?.addEventListener('change', updateElV2Controls);
+  // ElevenLabs sliders → update displayed values
+  ['el-stability', 'el-similarity', 'el-speed'].forEach(function (id) {
+    var el = document.getElementById(id);
+    if (el) el.addEventListener('input', function () {
+      var valEl = document.getElementById(id + '-val');
+      if (valEl) valEl.textContent = parseFloat(el.value).toFixed(id === 'el-speed' ? 1 : 2);
+    });
   });
 
   // Mode toggle
