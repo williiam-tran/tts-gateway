@@ -1,0 +1,970 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TTS Control Panel</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  /* ── Design Tokens ── */
+  :root {
+    /* Neutrals */
+    --bg-root: #0a0a0c;
+    --bg-surface: #111115;
+    --bg-raised: #18181e;
+    --bg-elevated: #1f1f28;
+    --bg-input: #14141a;
+    --border-subtle: rgba(255,255,255,0.06);
+    --border-default: rgba(255,255,255,0.10);
+    --border-focus: rgba(120,180,255,0.40);
+
+    /* Text */
+    --text-primary: #e8e8ed;
+    --text-secondary: #8b8b9e;
+    --text-tertiary: #55556a;
+    --text-inverse: #0a0a0c;
+
+    /* Accent — warm amber gold */
+    --accent: #f0b440;
+    --accent-hover: #f5c566;
+    --accent-glow: rgba(240,180,64,0.15);
+    --accent-subtle: rgba(240,180,64,0.08);
+
+    /* Semantic */
+    --success: #34d399;
+    --error: #f87171;
+    --info: #60a5fa;
+
+    /* Spacing (4px base) */
+    --sp-1: 4px;
+    --sp-2: 8px;
+    --sp-3: 12px;
+    --sp-4: 16px;
+    --sp-5: 20px;
+    --sp-6: 24px;
+    --sp-8: 32px;
+    --sp-10: 40px;
+    --sp-12: 48px;
+    --sp-16: 64px;
+
+    /* Radii */
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 14px;
+    --radius-xl: 20px;
+
+    /* Typography */
+    --font-body: 'DM Sans', system-ui, sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+    --text-xs: 0.75rem;
+    --text-sm: 0.8125rem;
+    --text-base: 0.9375rem;
+    --text-lg: 1.125rem;
+    --text-xl: 1.375rem;
+    --text-2xl: 1.75rem;
+    --text-3xl: 2.25rem;
+
+    /* Shadows */
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.3);
+    --shadow-md: 0 4px 12px rgba(0,0,0,0.4);
+    --shadow-lg: 0 8px 32px rgba(0,0,0,0.5);
+    --shadow-glow: 0 0 40px rgba(240,180,64,0.08);
+
+    /* Transitions */
+    --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+    --duration-fast: 150ms;
+    --duration-normal: 250ms;
+    --duration-slow: 400ms;
+  }
+
+  /* ── Reset ── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: var(--font-body);
+    background: var(--bg-root);
+    color: var(--text-primary);
+    font-size: var(--text-base);
+    line-height: 1.6;
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* ── Ambient background ── */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background:
+      radial-gradient(ellipse 80% 50% at 20% 0%, rgba(240,180,64,0.04) 0%, transparent 60%),
+      radial-gradient(ellipse 60% 40% at 80% 100%, rgba(96,165,250,0.03) 0%, transparent 60%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ── Noise texture overlay ── */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    opacity: 0.025;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    background-size: 256px 256px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ── Layout Shell ── */
+  .app {
+    position: relative;
+    z-index: 1;
+    max-width: 720px;
+    margin: 0 auto;
+    padding: var(--sp-8) var(--sp-6);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── Header ── */
+  .header {
+    margin-bottom: var(--sp-12);
+    animation: fadeSlideIn 0.6s var(--ease-out) both;
+  }
+
+  .header__badge {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--sp-2);
+    padding: var(--sp-1) var(--sp-3);
+    background: var(--accent-subtle);
+    border: 1px solid rgba(240,180,64,0.12);
+    border-radius: 100px;
+    font-size: var(--text-xs);
+    font-weight: 500;
+    color: var(--accent);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    margin-bottom: var(--sp-4);
+  }
+
+  .header__badge::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  .header__title {
+    font-size: var(--text-3xl);
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    line-height: 1.15;
+    background: linear-gradient(135deg, var(--text-primary) 0%, var(--text-secondary) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .header__subtitle {
+    margin-top: var(--sp-2);
+    color: var(--text-secondary);
+    font-size: var(--text-base);
+    font-weight: 400;
+  }
+
+  /* ── Card ── */
+  .card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-xl);
+    padding: var(--sp-8);
+    box-shadow: var(--shadow-md);
+    animation: fadeSlideIn 0.6s var(--ease-out) 0.1s both;
+  }
+
+  .card + .card {
+    margin-top: var(--sp-6);
+    animation-delay: 0.2s;
+  }
+
+  /* ── Form Elements ── */
+  .field {
+    margin-bottom: var(--sp-6);
+  }
+
+  .field:last-child {
+    margin-bottom: 0;
+  }
+
+  .field__label {
+    display: block;
+    font-size: var(--text-sm);
+    font-weight: 500;
+    color: var(--text-secondary);
+    margin-bottom: var(--sp-2);
+    letter-spacing: 0.01em;
+  }
+
+  .field__row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--sp-4);
+  }
+
+  .field__row.has-provider {
+    grid-template-columns: 1fr 1fr 1fr;
+  }
+
+  /* Selects & Inputs */
+  .select-wrap {
+    position: relative;
+  }
+
+  .select-wrap::after {
+    content: '';
+    position: absolute;
+    right: var(--sp-4);
+    top: 50%;
+    transform: translateY(-50%);
+    width: 0;
+    height: 0;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-top: 5px solid var(--text-tertiary);
+    pointer-events: none;
+    transition: border-color var(--duration-fast) ease;
+  }
+
+  .select-wrap:hover::after {
+    border-top-color: var(--text-secondary);
+  }
+
+  select, textarea {
+    width: 100%;
+    font-family: var(--font-body);
+    font-size: var(--text-base);
+    color: var(--text-primary);
+    background: var(--bg-input);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+    padding: var(--sp-3) var(--sp-4);
+    outline: none;
+    transition: border-color var(--duration-fast) ease, box-shadow var(--duration-fast) ease;
+    appearance: none;
+    -webkit-appearance: none;
+  }
+
+  select {
+    cursor: pointer;
+    padding-right: var(--sp-10);
+  }
+
+  select option {
+    background: var(--bg-raised);
+    color: var(--text-primary);
+  }
+
+  textarea {
+    resize: vertical;
+    min-height: 120px;
+    line-height: 1.7;
+  }
+
+  select:hover, textarea:hover {
+    border-color: rgba(255,255,255,0.15);
+  }
+
+  select:focus, textarea:focus {
+    border-color: var(--border-focus);
+    box-shadow: 0 0 0 3px rgba(120,180,255,0.10);
+  }
+
+  /* ── Toggle Switch ── */
+  .toggle-group {
+    display: inline-flex;
+    background: var(--bg-input);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+    padding: 3px;
+    gap: 2px;
+  }
+
+  .toggle-group__btn {
+    font-family: var(--font-body);
+    font-size: var(--text-sm);
+    font-weight: 500;
+    padding: var(--sp-2) var(--sp-4);
+    border: none;
+    border-radius: calc(var(--radius-md) - 3px);
+    background: transparent;
+    color: var(--text-tertiary);
+    cursor: pointer;
+    transition: all var(--duration-fast) ease;
+    white-space: nowrap;
+  }
+
+  .toggle-group__btn:hover {
+    color: var(--text-secondary);
+  }
+
+  .toggle-group__btn.active {
+    background: var(--bg-elevated);
+    color: var(--text-primary);
+    box-shadow: var(--shadow-sm);
+  }
+
+  /* ── Controls Row ── */
+  .controls-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--sp-4);
+    flex-wrap: wrap;
+  }
+
+  /* ── Generate Button ── */
+  .btn-generate {
+    font-family: var(--font-body);
+    font-size: var(--text-base);
+    font-weight: 600;
+    padding: var(--sp-3) var(--sp-8);
+    border: none;
+    border-radius: var(--radius-md);
+    background: var(--accent);
+    color: var(--text-inverse);
+    cursor: pointer;
+    transition: all var(--duration-normal) var(--ease-out);
+    position: relative;
+    overflow: hidden;
+    letter-spacing: 0.01em;
+    min-width: 160px;
+  }
+
+  .btn-generate::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(255,255,255,0.15) 0%, transparent 50%);
+    opacity: 0;
+    transition: opacity var(--duration-fast) ease;
+  }
+
+  .btn-generate:hover:not(:disabled) {
+    background: var(--accent-hover);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-glow), var(--shadow-md);
+  }
+
+  .btn-generate:hover:not(:disabled)::before {
+    opacity: 1;
+  }
+
+  .btn-generate:active:not(:disabled) {
+    transform: translateY(0);
+  }
+
+  .btn-generate:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .btn-generate.loading {
+    pointer-events: none;
+  }
+
+  /* ── Spinner inside button ── */
+  .spinner {
+    display: none;
+    width: 18px;
+    height: 18px;
+    border: 2px solid rgba(10,10,12,0.25);
+    border-top-color: var(--text-inverse);
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+    margin: 0 auto;
+  }
+
+  .btn-generate.loading .spinner { display: inline-block; }
+  .btn-generate.loading .btn-label { display: none; }
+
+  /* ── Audio Player Card ── */
+  .player-card {
+    animation: fadeSlideIn 0.6s var(--ease-out) 0.2s both;
+  }
+
+  .player-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: var(--sp-4);
+  }
+
+  .player-header__title {
+    font-size: var(--text-sm);
+    font-weight: 500;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    gap: var(--sp-2);
+  }
+
+  .player-header__meta {
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    color: var(--text-tertiary);
+  }
+
+  .audio-container {
+    background: var(--bg-input);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    padding: var(--sp-4);
+    min-height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .audio-container audio {
+    width: 100%;
+    height: 40px;
+    border-radius: var(--radius-sm);
+  }
+
+  /* Webkit audio styling */
+  audio::-webkit-media-controls-panel {
+    background: var(--bg-elevated);
+  }
+
+  .audio-placeholder {
+    color: var(--text-tertiary);
+    font-size: var(--text-sm);
+    font-style: italic;
+  }
+
+  /* ── Status Bar ── */
+  .status-bar {
+    margin-top: var(--sp-3);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    color: var(--text-tertiary);
+    min-height: 20px;
+    display: flex;
+    align-items: center;
+    gap: var(--sp-2);
+    transition: color var(--duration-fast) ease;
+  }
+
+  .status-bar.status--loading { color: var(--info); }
+  .status-bar.status--success { color: var(--success); }
+  .status-bar.status--error { color: var(--error); }
+
+  .status-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+    flex-shrink: 0;
+  }
+
+  .status-bar.status--loading .status-dot {
+    animation: pulse 1s ease-in-out infinite;
+  }
+
+  /* ── Footer ── */
+  .footer {
+    margin-top: auto;
+    padding-top: var(--sp-12);
+    text-align: center;
+    animation: fadeSlideIn 0.6s var(--ease-out) 0.3s both;
+  }
+
+  .footer__text {
+    font-size: var(--text-xs);
+    color: var(--text-tertiary);
+    letter-spacing: 0.02em;
+  }
+
+  .footer__sep {
+    display: inline-block;
+    width: 3px;
+    height: 3px;
+    border-radius: 50%;
+    background: var(--text-tertiary);
+    vertical-align: middle;
+    margin: 0 var(--sp-2);
+    opacity: 0.5;
+  }
+
+  /* ── Animations ── */
+  @keyframes fadeSlideIn {
+    from {
+      opacity: 0;
+      transform: translateY(12px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
+  /* ── Responsive ── */
+  @media (max-width: 600px) {
+    .app {
+      padding: var(--sp-5) var(--sp-4);
+    }
+
+    .card {
+      padding: var(--sp-5);
+      border-radius: var(--radius-lg);
+    }
+
+    .header__title {
+      font-size: var(--text-2xl);
+    }
+
+    .field__row,
+    .field__row.has-provider {
+      grid-template-columns: 1fr;
+    }
+
+    .controls-row {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    .toggle-group {
+      align-self: flex-start;
+    }
+
+    .btn-generate {
+      width: 100%;
+    }
+  }
+</style>
+</head>
+<body>
+
+<div class="app">
+
+  <!-- Header -->
+  <header class="header">
+    <div class="header__badge">Live</div>
+    <h1 class="header__title">Text-to-Speech</h1>
+    <p class="header__subtitle">Multi-language voice synthesis control panel</p>
+  </header>
+
+  <!-- Configuration Card -->
+  <section class="card">
+    <div class="field">
+      <div class="field__row" id="field-row-selects">
+        <div>
+          <label class="field__label" for="language">Language</label>
+          <div class="select-wrap">
+            <select id="language">
+              <option value="english">English</option>
+              <option value="vietnamese">Ti&#7871;ng Vi&#7879;t</option>
+            </select>
+          </div>
+        </div>
+        <div id="provider-field">
+          <label class="field__label" for="provider">Provider</label>
+          <div class="select-wrap">
+            <select id="provider">
+              <option value="pocket-tts">Pocket TTS</option>
+              <option value="kokoro">Kokoro</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label class="field__label" for="voice">Voice</label>
+          <div class="select-wrap">
+            <select id="voice">
+              <option value="" disabled selected>Loading voices...</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="field">
+      <label class="field__label" for="text-input">Text</label>
+      <textarea id="text-input" placeholder="Type or paste the text you want to hear spoken aloud..."></textarea>
+    </div>
+
+    <div class="controls-row">
+      <div class="toggle-group" role="radiogroup" aria-label="Synthesis mode">
+        <button type="button" class="toggle-group__btn active" data-mode="standard" role="radio" aria-checked="true">Standard</button>
+        <button type="button" class="toggle-group__btn" data-mode="streaming" role="radio" aria-checked="false">Streaming</button>
+      </div>
+      <button type="button" class="btn-generate" id="generate-btn">
+        <span class="btn-label">Generate Speech</span>
+        <span class="spinner"></span>
+      </button>
+    </div>
+  </section>
+
+  <!-- Player Card -->
+  <section class="card player-card">
+    <div class="player-header">
+      <span class="player-header__title">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 13 8 5 13"/></svg>
+        Output
+      </span>
+      <span class="player-header__meta" id="player-meta"></span>
+    </div>
+    <div class="audio-container" id="audio-container">
+      <span class="audio-placeholder">No audio generated yet</span>
+    </div>
+    <div class="status-bar" id="status-bar"></div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <p class="footer__text">
+      TTS Control Panel
+      <span class="footer__sep"></span>
+      Multi-language voice synthesis
+    </p>
+  </footer>
+
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ────────────────────────────────────
+   *  Configuration
+   * ──────────────────────────────────── */
+  const GATEWAY = window.location.origin;
+
+  const ENGLISH_PROVIDERS = {
+    'pocket-tts': {
+      baseUrl: GATEWAY + '/en',
+      headers: { 'Content-Type': 'application/json' },
+      customVoices: [
+        { id: 'eric', name: 'Eric (custom clone)' },
+        { id: 'lowy', name: 'Lowy (custom clone)' },
+      ],
+    },
+    'kokoro': {
+      baseUrl: GATEWAY + '/en/kokoro',
+      headers: { 'Content-Type': 'application/json' },
+      customVoices: [],
+    },
+  };
+
+  const VIETNAMESE_BACKEND = {
+    baseUrl: GATEWAY + '/vi',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-API-Key': 'n7HMjL0s8xS8l9pwgCvPSzw4ssA6BdYmAJu--tJlfJ8',
+    },
+    customVoices: [],
+  };
+
+  /* ────────────────────────────────────
+   *  DOM refs
+   * ──────────────────────────────────── */
+  const $language = document.getElementById('language');
+  const $provider = document.getElementById('provider');
+  const $providerField = document.getElementById('provider-field');
+  const $fieldRow = document.getElementById('field-row-selects');
+  const $voice = document.getElementById('voice');
+  const $text = document.getElementById('text-input');
+  const $generateBtn = document.getElementById('generate-btn');
+  const $audioContainer = document.getElementById('audio-container');
+  const $statusBar = document.getElementById('status-bar');
+  const $playerMeta = document.getElementById('player-meta');
+  const $toggleBtns = document.querySelectorAll('.toggle-group__btn');
+
+  let currentMode = 'standard'; // 'standard' | 'streaming'
+  let currentAudioUrl = null;   // for revoking object URLs
+
+  /* ────────────────────────────────────
+   *  Helpers
+   * ──────────────────────────────────── */
+  function getBackend() {
+    if ($language.value === 'vietnamese') {
+      return VIETNAMESE_BACKEND;
+    }
+    return ENGLISH_PROVIDERS[$provider.value] || ENGLISH_PROVIDERS['pocket-tts'];
+  }
+
+  function updateProviderVisibility() {
+    const isEnglish = $language.value === 'english';
+    $providerField.style.display = isEnglish ? '' : 'none';
+    $fieldRow.classList.toggle('has-provider', isEnglish);
+  }
+
+  function setStatus(text, level) {
+    $statusBar.className = 'status-bar' + (level ? ' status--' + level : '');
+    $statusBar.innerHTML = level
+      ? '<span class="status-dot"></span>' + escHtml(text)
+      : escHtml(text);
+  }
+
+  function escHtml(str) {
+    const d = document.createElement('div');
+    d.textContent = str;
+    return d.innerHTML;
+  }
+
+  function setLoading(on) {
+    $generateBtn.classList.toggle('loading', on);
+    $generateBtn.disabled = on;
+  }
+
+  function cleanupAudioUrl() {
+    if (currentAudioUrl) {
+      URL.revokeObjectURL(currentAudioUrl);
+      currentAudioUrl = null;
+    }
+  }
+
+  function formatBytes(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+  }
+
+  /* ────────────────────────────────────
+   *  Fetch Voices
+   * ──────────────────────────────────── */
+  async function fetchVoices() {
+    const backend = getBackend();
+    $voice.innerHTML = '<option value="" disabled selected>Loading voices\u2026</option>';
+
+    try {
+      const resp = await fetch(backend.baseUrl + '/voices', {
+        method: 'POST',
+        headers: backend.headers,
+        body: JSON.stringify({}),
+      });
+
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+
+      const data = await resp.json();
+      const apiVoices = data.voices || [];
+      const customVoices = backend.customVoices || [];
+      const allVoices = customVoices.concat(apiVoices);
+
+      if (allVoices.length === 0) {
+        $voice.innerHTML = '<option value="" disabled selected>No voices available</option>';
+        return;
+      }
+
+      $voice.innerHTML = '';
+      allVoices.forEach(function (v) {
+        const opt = document.createElement('option');
+        opt.value = v.id;
+        opt.textContent = v.name;
+        $voice.appendChild(opt);
+      });
+
+      setStatus('Loaded ' + allVoices.length + ' voice' + (allVoices.length !== 1 ? 's' : ''), 'success');
+      setTimeout(function () { setStatus(''); }, 2500);
+    } catch (err) {
+      console.error('Failed to fetch voices:', err);
+      // If fetch failed but we have custom voices, still show them
+      const customVoices = backend.customVoices || [];
+      if (customVoices.length > 0) {
+        $voice.innerHTML = '';
+        customVoices.forEach(function (v) {
+          const opt = document.createElement('option');
+          opt.value = v.id;
+          opt.textContent = v.name;
+          $voice.appendChild(opt);
+        });
+        setStatus('API unavailable \u2014 showing custom voices only', 'error');
+      } else {
+        $voice.innerHTML = '<option value="" disabled selected>Failed to load voices</option>';
+        setStatus('Could not load voices \u2014 ' + err.message, 'error');
+      }
+    }
+  }
+
+  /* ────────────────────────────────────
+   *  Standard Synthesis
+   * ──────────────────────────────────── */
+  async function synthesizeStandard(text, voiceId) {
+    const backend = getBackend();
+    const t0 = performance.now();
+    setStatus('Generating audio\u2026', 'loading');
+
+    const resp = await fetch(backend.baseUrl + '/synthesize', {
+      method: 'POST',
+      headers: backend.headers,
+      body: JSON.stringify({ text: text, voice: voiceId }),
+    });
+
+    if (!resp.ok) {
+      const body = await resp.text().catch(function () { return ''; });
+      throw new Error('HTTP ' + resp.status + (body ? ': ' + body : ''));
+    }
+
+    const blob = await resp.blob();
+    const elapsed = ((performance.now() - t0) / 1000).toFixed(1);
+    return { blob: blob, elapsed: elapsed };
+  }
+
+  /* ────────────────────────────────────
+   *  Streaming Synthesis
+   * ──────────────────────────────────── */
+  async function synthesizeStreaming(text, voiceId) {
+    const backend = getBackend();
+    const t0 = performance.now();
+    setStatus('Streaming audio\u2026', 'loading');
+
+    const resp = await fetch(backend.baseUrl + '/stream', {
+      method: 'POST',
+      headers: backend.headers,
+      body: JSON.stringify({ text: text, voice: voiceId }),
+    });
+
+    if (!resp.ok) {
+      const body = await resp.text().catch(function () { return ''; });
+      throw new Error('HTTP ' + resp.status + (body ? ': ' + body : ''));
+    }
+
+    const reader = resp.body.getReader();
+    const chunks = [];
+    let totalBytes = 0;
+
+    while (true) {
+      var result = await reader.read();
+      if (result.done) break;
+      chunks.push(result.value);
+      totalBytes += result.value.length;
+      setStatus('Streaming\u2026 ' + formatBytes(totalBytes), 'loading');
+    }
+
+    const merged = new Uint8Array(totalBytes);
+    let offset = 0;
+    for (var i = 0; i < chunks.length; i++) {
+      merged.set(chunks[i], offset);
+      offset += chunks[i].length;
+    }
+
+    const blob = new Blob([merged], { type: 'audio/wav' });
+    const elapsed = ((performance.now() - t0) / 1000).toFixed(1);
+    return { blob: blob, elapsed: elapsed };
+  }
+
+  /* ────────────────────────────────────
+   *  Play Audio
+   * ──────────────────────────────────── */
+  function playAudio(blob, elapsed) {
+    cleanupAudioUrl();
+    currentAudioUrl = URL.createObjectURL(blob);
+
+    $audioContainer.innerHTML = '';
+    var audio = document.createElement('audio');
+    audio.controls = true;
+    audio.autoplay = true;
+    audio.src = currentAudioUrl;
+    $audioContainer.appendChild(audio);
+
+    $playerMeta.textContent = formatBytes(blob.size) + ' \u00b7 ' + elapsed + 's';
+    setStatus('Audio ready \u2014 ' + elapsed + 's generation time', 'success');
+  }
+
+  /* ────────────────────────────────────
+   *  Generate handler
+   * ──────────────────────────────────── */
+  async function handleGenerate() {
+    var text = $text.value.trim();
+    var voiceId = $voice.value;
+
+    if (!text) {
+      setStatus('Please enter some text', 'error');
+      $text.focus();
+      return;
+    }
+
+    if (!voiceId) {
+      setStatus('Please select a voice', 'error');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      var result;
+      if (currentMode === 'streaming') {
+        result = await synthesizeStreaming(text, voiceId);
+      } else {
+        result = await synthesizeStandard(text, voiceId);
+      }
+      playAudio(result.blob, result.elapsed);
+    } catch (err) {
+      console.error('Synthesis failed:', err);
+      setStatus('Generation failed \u2014 ' + err.message, 'error');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  /* ────────────────────────────────────
+   *  Event Bindings
+   * ──────────────────────────────────── */
+
+  // Language change → show/hide provider, reload voices
+  $language.addEventListener('change', function () {
+    updateProviderVisibility();
+    fetchVoices();
+  });
+
+  // Provider change → reload voices
+  $provider.addEventListener('change', fetchVoices);
+
+  // Mode toggle
+  $toggleBtns.forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      $toggleBtns.forEach(function (b) {
+        b.classList.remove('active');
+        b.setAttribute('aria-checked', 'false');
+      });
+      btn.classList.add('active');
+      btn.setAttribute('aria-checked', 'true');
+      currentMode = btn.dataset.mode;
+    });
+  });
+
+  // Generate
+  $generateBtn.addEventListener('click', handleGenerate);
+
+  // Ctrl+Enter / Cmd+Enter shortcut
+  $text.addEventListener('keydown', function (e) {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+      e.preventDefault();
+      handleGenerate();
+    }
+  });
+
+  /* ────────────────────────────────────
+   *  Init
+   * ──────────────────────────────────── */
+  updateProviderVisibility();
+  fetchVoices();
+})();
+</script>
+
+</body>
+</html>
