@@ -587,7 +587,7 @@
           <div class="select-wrap">
             <select id="provider">
               <option value="pocket-tts">Pocket TTS</option>
-              <option value="kokoro">Kokoro</option>
+              <option value="kokoro" disabled>Kokoro (coming soon)</option>
             </select>
           </div>
         </div>
@@ -666,9 +666,10 @@
       ],
     },
     'kokoro': {
-      baseUrl: GATEWAY + '/en/kokoro',
+      baseUrl: GATEWAY + '/en',
       headers: AUTH_HEADERS,
       customVoices: [],
+      disabled: true,
     },
   };
 
