@@ -477,6 +477,60 @@
     animation: pulse 1s ease-in-out infinite;
   }
 
+  /* ── API Key Input ── */
+  .api-key-row {
+    margin-top: var(--sp-3);
+    display: none;
+    animation: fadeSlideIn 0.3s var(--ease-out) both;
+  }
+
+  .api-key-row.visible {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-3);
+  }
+
+  .api-key-row__icon {
+    flex-shrink: 0;
+    color: var(--text-tertiary);
+  }
+
+  .api-key-row input {
+    flex: 1;
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    color: var(--text-primary);
+    background: var(--bg-input);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-sm);
+    padding: var(--sp-2) var(--sp-3);
+    outline: none;
+    transition: border-color var(--duration-fast) ease, box-shadow var(--duration-fast) ease;
+  }
+
+  .api-key-row input::placeholder {
+    color: var(--text-tertiary);
+    font-family: var(--font-body);
+    font-style: italic;
+  }
+
+  .api-key-row input:focus {
+    border-color: var(--border-focus);
+    box-shadow: 0 0 0 3px rgba(120,180,255,0.10);
+  }
+
+  .api-key-row__status {
+    font-size: var(--text-xs);
+    color: var(--success);
+    opacity: 0;
+    transition: opacity var(--duration-fast) ease;
+    white-space: nowrap;
+  }
+
+  .api-key-row__status.show {
+    opacity: 1;
+  }
+
   /* ── Footer ── */
   .footer {
     margin-top: auto;
@@ -586,8 +640,7 @@
           <label class="field__label" for="provider">Provider</label>
           <div class="select-wrap">
             <select id="provider">
-              <option value="pocket-tts">Pocket TTS</option>
-              <option value="kokoro" disabled>Kokoro (coming soon)</option>
+              <option value="" disabled selected>Loading…</option>
             </select>
           </div>
         </div>
@@ -600,6 +653,11 @@
           </div>
           <button type="button" id="set-default-btn" style="margin-top:var(--sp-1);background:none;border:none;cursor:pointer;font-family:var(--font-body);font-size:var(--text-xs);color:var(--accent);padding:0;">Set Default</button>
         </div>
+      </div>
+      <div class="api-key-row" id="api-key-row">
+        <svg class="api-key-row__icon" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="10" height="7" rx="1.5"/><path d="M5 7V5a3 3 0 0 1 6 0v2"/></svg>
+        <input type="password" id="api-key-input" placeholder="Paste API key…" autocomplete="off" spellcheck="false">
+        <span class="api-key-row__status" id="api-key-status">Saved</span>
       </div>
     </div>
 
@@ -668,24 +726,86 @@
   const AUTH_HEADERS = { 'Content-Type': 'application/json', 'X-API-Key': API_KEY };
   const DEFAULT_VOICES = { english: 'lowy', vietnamese: 'Ngan' };
 
-  const ENGLISH_PROVIDERS = {
+  /* Provider registry — internal (gateway) and external (direct API) */
+  const PROVIDERS = {
     'pocket-tts': {
+      type: 'internal',
+      label: 'Pocket TTS',
       baseUrl: GATEWAY + '/en',
       headers: AUTH_HEADERS,
-      customVoices: [],
+      languages: ['english'],
     },
-    'kokoro': {
-      baseUrl: GATEWAY + '/en',
+    'siba-vietnamese': {
+      type: 'internal',
+      label: 'SIBA Vietnamese',
+      baseUrl: GATEWAY + '/vi',
       headers: AUTH_HEADERS,
-      customVoices: [],
-      disabled: true,
+      languages: ['vietnamese'],
     },
-  };
-
-  const VIETNAMESE_BACKEND = {
-    baseUrl: GATEWAY + '/vi',
-    headers: AUTH_HEADERS,
-    customVoices: [],
+    'elevenlabs': {
+      type: 'external',
+      label: 'ElevenLabs',
+      languages: ['english', 'vietnamese'],
+      localStorageKeyName: 'tts-elevenlabs-key',
+      fetchVoices: async function (apiKey) {
+        var resp = await fetch('https://api.elevenlabs.io/v2/voices?page_size=100', {
+          headers: { 'xi-api-key': apiKey }
+        });
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        var data = await resp.json();
+        return data.voices.map(function (v) { return { id: v.voice_id, name: v.name }; });
+      },
+      synthesize: async function (text, voiceId, apiKey) {
+        var resp = await fetch('https://api.elevenlabs.io/v1/text-to-speech/' + encodeURIComponent(voiceId), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'xi-api-key': apiKey },
+          body: JSON.stringify({ text: text, model_id: 'eleven_multilingual_v2', voice_settings: { stability: 0.5, similarity_boost: 0.75, speed: 1.0 } })
+        });
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        return resp.blob();
+      },
+      stream: async function (text, voiceId, apiKey) {
+        var resp = await fetch('https://api.elevenlabs.io/v1/text-to-speech/' + encodeURIComponent(voiceId) + '/stream', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'xi-api-key': apiKey },
+          body: JSON.stringify({ text: text, model_id: 'eleven_multilingual_v2', voice_settings: { stability: 0.5, similarity_boost: 0.75, speed: 1.0 } })
+        });
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        return resp;
+      },
+    },
+    'fish-audio': {
+      type: 'external',
+      label: 'Fish Audio',
+      languages: ['english', 'vietnamese'],
+      localStorageKeyName: 'tts-fish-key',
+      fetchVoices: async function (apiKey) {
+        var resp = await fetch('https://api.fish.audio/model?page_size=20&self=true', {
+          headers: { 'Authorization': 'Bearer ' + apiKey }
+        });
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        var data = await resp.json();
+        return data.items.map(function (v) { return { id: v._id, name: v.title }; });
+      },
+      synthesize: async function (text, voiceId, apiKey) {
+        var resp = await fetch('https://api.fish.audio/v1/tts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey, 'model': 's2-pro' },
+          body: JSON.stringify({ text: text, reference_id: voiceId, format: 'mp3', mp3_bitrate: 128, normalize: true, latency: 'normal' })
+        });
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        return resp.blob();
+      },
+      stream: async function (text, voiceId, apiKey) {
+        var resp = await fetch('https://api.fish.audio/v1/tts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey, 'model': 's2-pro' },
+          body: JSON.stringify({ text: text, reference_id: voiceId, format: 'mp3', mp3_bitrate: 128, normalize: true, latency: 'normal' })
+        });
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        return resp;
+      },
+    },
   };
 
   /* ────────────────────────────────────
@@ -702,24 +822,66 @@
   const $statusBar = document.getElementById('status-bar');
   const $playerMeta = document.getElementById('player-meta');
   const $toggleBtns = document.querySelectorAll('.toggle-group__btn');
+  const $apiKeyRow = document.getElementById('api-key-row');
+  const $apiKeyInput = document.getElementById('api-key-input');
+  const $apiKeyStatus = document.getElementById('api-key-status');
 
   let currentMode = 'standard'; // 'standard' | 'streaming'
   let currentAudioUrl = null;   // for revoking object URLs
+  let apiKeySaveTimer = null;   // debounce timer for API key saving
 
   /* ────────────────────────────────────
    *  Helpers
    * ──────────────────────────────────── */
-  function getBackend() {
-    if ($language.value === 'vietnamese') {
-      return VIETNAMESE_BACKEND;
+  function getProvider() {
+    return PROVIDERS[$provider.value] || PROVIDERS['pocket-tts'];
+  }
+
+  function getProviderApiKey(provider) {
+    if (provider.type !== 'external') return null;
+    return localStorage.getItem(provider.localStorageKeyName) || '';
+  }
+
+  function populateProviderDropdown() {
+    var lang = $language.value;
+    var currentVal = $provider.value;
+    $provider.innerHTML = '';
+    var firstValue = null;
+    Object.keys(PROVIDERS).forEach(function (key) {
+      var p = PROVIDERS[key];
+      if (p.languages.indexOf(lang) === -1) return;
+      var opt = document.createElement('option');
+      opt.value = key;
+      opt.textContent = p.label;
+      $provider.appendChild(opt);
+      if (!firstValue) firstValue = key;
+    });
+    // Restore previous selection if still available, otherwise first
+    if ($provider.querySelector('option[value="' + currentVal + '"]')) {
+      $provider.value = currentVal;
+    } else if (firstValue) {
+      $provider.value = firstValue;
     }
-    return ENGLISH_PROVIDERS[$provider.value] || ENGLISH_PROVIDERS['pocket-tts'];
   }
 
   function updateProviderVisibility() {
-    const isEnglish = $language.value === 'english';
-    $providerField.style.display = isEnglish ? '' : 'none';
-    $fieldRow.classList.toggle('has-provider', isEnglish);
+    // Provider dropdown always visible now
+    $providerField.style.display = '';
+    $fieldRow.classList.add('has-provider');
+    updateApiKeyVisibility();
+  }
+
+  function updateApiKeyVisibility() {
+    var provider = getProvider();
+    if (provider.type === 'external') {
+      $apiKeyRow.classList.add('visible');
+      var savedKey = getProviderApiKey(provider);
+      $apiKeyInput.value = savedKey;
+      $apiKeyInput.placeholder = 'Paste ' + provider.label + ' API key\u2026';
+    } else {
+      $apiKeyRow.classList.remove('visible');
+      $apiKeyInput.value = '';
+    }
   }
 
   function setStatus(text, level) {
@@ -757,22 +919,31 @@
    *  Fetch Voices
    * ──────────────────────────────────── */
   async function fetchVoices() {
-    const backend = getBackend();
+    var provider = getProvider();
     $voice.innerHTML = '<option value="" disabled selected>Loading voices\u2026</option>';
 
     try {
-      const resp = await fetch(backend.baseUrl + '/voices', {
-        method: 'POST',
-        headers: backend.headers,
-        body: JSON.stringify({}),
-      });
+      var allVoices;
 
-      if (!resp.ok) throw new Error('HTTP ' + resp.status);
-
-      const data = await resp.json();
-      const apiVoices = data.voices || [];
-      const customVoices = backend.customVoices || [];
-      const allVoices = customVoices.concat(apiVoices);
+      if (provider.type === 'external') {
+        var apiKey = getProviderApiKey(provider);
+        if (!apiKey) {
+          $voice.innerHTML = '<option value="" disabled selected>Enter API key first</option>';
+          setStatus('API key required for ' + provider.label, 'error');
+          return;
+        }
+        allVoices = await provider.fetchVoices(apiKey);
+      } else {
+        // Internal provider — use gateway /voices endpoint
+        var resp = await fetch(provider.baseUrl + '/voices', {
+          method: 'POST',
+          headers: provider.headers,
+          body: JSON.stringify({}),
+        });
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        var data = await resp.json();
+        allVoices = data.voices || [];
+      }
 
       if (allVoices.length === 0) {
         $voice.innerHTML = '<option value="" disabled selected>No voices available</option>';
@@ -781,7 +952,7 @@
 
       $voice.innerHTML = '';
       allVoices.forEach(function (v) {
-        const opt = document.createElement('option');
+        var opt = document.createElement('option');
         opt.value = v.id;
         opt.textContent = v.name;
         $voice.appendChild(opt);
@@ -798,21 +969,8 @@
       setTimeout(function () { setStatus(''); }, 2500);
     } catch (err) {
       console.error('Failed to fetch voices:', err);
-      // If fetch failed but we have custom voices, still show them
-      const customVoices = backend.customVoices || [];
-      if (customVoices.length > 0) {
-        $voice.innerHTML = '';
-        customVoices.forEach(function (v) {
-          const opt = document.createElement('option');
-          opt.value = v.id;
-          opt.textContent = v.name;
-          $voice.appendChild(opt);
-        });
-        setStatus('API unavailable \u2014 showing custom voices only', 'error');
-      } else {
-        $voice.innerHTML = '<option value="" disabled selected>Failed to load voices</option>';
-        setStatus('Could not load voices \u2014 ' + err.message, 'error');
-      }
+      $voice.innerHTML = '<option value="" disabled selected>Failed to load voices</option>';
+      setStatus('Could not load voices \u2014 ' + err.message, 'error');
     }
   }
 
@@ -820,23 +978,29 @@
    *  Standard Synthesis
    * ──────────────────────────────────── */
   async function synthesizeStandard(text, voiceId) {
-    const backend = getBackend();
-    const t0 = performance.now();
+    var provider = getProvider();
+    var t0 = performance.now();
     setStatus('Generating audio\u2026', 'loading');
 
-    const resp = await fetch(backend.baseUrl + '/synthesize', {
-      method: 'POST',
-      headers: backend.headers,
-      body: JSON.stringify({ text: text, voice: voiceId }),
-    });
-
-    if (!resp.ok) {
-      const body = await resp.text().catch(function () { return ''; });
-      throw new Error('HTTP ' + resp.status + (body ? ': ' + body : ''));
+    var blob;
+    if (provider.type === 'external') {
+      var apiKey = getProviderApiKey(provider);
+      if (!apiKey) throw new Error('API key required for ' + provider.label);
+      blob = await provider.synthesize(text, voiceId, apiKey);
+    } else {
+      var resp = await fetch(provider.baseUrl + '/synthesize', {
+        method: 'POST',
+        headers: provider.headers,
+        body: JSON.stringify({ text: text, voice: voiceId }),
+      });
+      if (!resp.ok) {
+        var body = await resp.text().catch(function () { return ''; });
+        throw new Error('HTTP ' + resp.status + (body ? ': ' + body : ''));
+      }
+      blob = await resp.blob();
     }
 
-    const blob = await resp.blob();
-    const elapsed = ((performance.now() - t0) / 1000).toFixed(1);
+    var elapsed = ((performance.now() - t0) / 1000).toFixed(1);
     return { blob: blob, elapsed: elapsed };
   }
 
@@ -844,24 +1008,30 @@
    *  Streaming Synthesis
    * ──────────────────────────────────── */
   async function synthesizeStreaming(text, voiceId) {
-    const backend = getBackend();
-    const t0 = performance.now();
+    var provider = getProvider();
+    var t0 = performance.now();
     setStatus('Streaming audio\u2026', 'loading');
 
-    const resp = await fetch(backend.baseUrl + '/stream', {
-      method: 'POST',
-      headers: backend.headers,
-      body: JSON.stringify({ text: text, voice: voiceId }),
-    });
-
-    if (!resp.ok) {
-      const body = await resp.text().catch(function () { return ''; });
-      throw new Error('HTTP ' + resp.status + (body ? ': ' + body : ''));
+    var resp;
+    if (provider.type === 'external') {
+      var apiKey = getProviderApiKey(provider);
+      if (!apiKey) throw new Error('API key required for ' + provider.label);
+      resp = await provider.stream(text, voiceId, apiKey);
+    } else {
+      resp = await fetch(provider.baseUrl + '/stream', {
+        method: 'POST',
+        headers: provider.headers,
+        body: JSON.stringify({ text: text, voice: voiceId }),
+      });
+      if (!resp.ok) {
+        var body = await resp.text().catch(function () { return ''; });
+        throw new Error('HTTP ' + resp.status + (body ? ': ' + body : ''));
+      }
     }
 
-    const reader = resp.body.getReader();
-    const chunks = [];
-    let totalBytes = 0;
+    var reader = resp.body.getReader();
+    var chunks = [];
+    var totalBytes = 0;
 
     while (true) {
       var result = await reader.read();
@@ -871,22 +1041,28 @@
       setStatus('Streaming\u2026 ' + formatBytes(totalBytes), 'loading');
     }
 
-    const merged = new Uint8Array(totalBytes);
-    let offset = 0;
+    var merged = new Uint8Array(totalBytes);
+    var offset = 0;
     for (var i = 0; i < chunks.length; i++) {
       merged.set(chunks[i], offset);
       offset += chunks[i].length;
     }
 
-    // Fix WAV header sizes for streaming responses
-    if (totalBytes > 44) {
-      var view = new DataView(merged.buffer);
-      view.setUint32(4, totalBytes - 8, true);   // RIFF chunk size
-      view.setUint32(40, totalBytes - 44, true);  // data chunk size
+    var blob;
+    if (provider.type === 'external') {
+      // External providers return MP3
+      blob = new Blob([merged], { type: 'audio/mpeg' });
+    } else {
+      // Internal providers return WAV — fix header sizes for streaming
+      if (totalBytes > 44) {
+        var view = new DataView(merged.buffer);
+        view.setUint32(4, totalBytes - 8, true);   // RIFF chunk size
+        view.setUint32(40, totalBytes - 44, true);  // data chunk size
+      }
+      blob = new Blob([merged], { type: 'audio/wav' });
     }
 
-    const blob = new Blob([merged], { type: 'audio/wav' });
-    const elapsed = ((performance.now() - t0) / 1000).toFixed(1);
+    var elapsed = ((performance.now() - t0) / 1000).toFixed(1);
     return { blob: blob, elapsed: elapsed };
   }
 
@@ -914,10 +1090,17 @@
   async function handleGenerate() {
     var text = $text.value.trim();
     var voiceId = $voice.value;
+    var provider = getProvider();
 
     if (!text) {
       setStatus('Please enter some text', 'error');
       $text.focus();
+      return;
+    }
+
+    if (provider.type === 'external' && !getProviderApiKey(provider)) {
+      setStatus('API key required for ' + provider.label, 'error');
+      $apiKeyInput.focus();
       return;
     }
 
@@ -948,14 +1131,39 @@
    *  Event Bindings
    * ──────────────────────────────────── */
 
-  // Language change → show/hide provider, reload voices
+  // Language change → repopulate providers, update visibility, reload voices
   $language.addEventListener('change', function () {
+    populateProviderDropdown();
     updateProviderVisibility();
     fetchVoices();
   });
 
-  // Provider change → reload voices
-  $provider.addEventListener('change', fetchVoices);
+  // Provider change → update API key visibility, reload voices
+  $provider.addEventListener('change', function () {
+    updateApiKeyVisibility();
+    fetchVoices();
+  });
+
+  // API key input → debounced save to localStorage, re-fetch voices
+  $apiKeyInput.addEventListener('input', function () {
+    clearTimeout(apiKeySaveTimer);
+    apiKeySaveTimer = setTimeout(function () {
+      var provider = getProvider();
+      if (provider.type === 'external' && provider.localStorageKeyName) {
+        var val = $apiKeyInput.value.trim();
+        if (val) {
+          localStorage.setItem(provider.localStorageKeyName, val);
+          $apiKeyStatus.classList.add('show');
+          setTimeout(function () { $apiKeyStatus.classList.remove('show'); }, 1500);
+          fetchVoices();
+        } else {
+          localStorage.removeItem(provider.localStorageKeyName);
+          $voice.innerHTML = '<option value="" disabled selected>Enter API key first</option>';
+          setStatus('API key required for ' + provider.label, 'error');
+        }
+      }
+    }, 600);
+  });
 
   // Mode toggle
   $toggleBtns.forEach(function (btn) {
@@ -993,6 +1201,7 @@
   /* ────────────────────────────────────
    *  Init
    * ──────────────────────────────────── */
+  populateProviderDropdown();
   updateProviderVisibility();
   fetchVoices();
 })();
