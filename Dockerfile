@@ -1,6 +1,6 @@
 FROM nginx:alpine
 RUN rm /etc/nginx/conf.d/default.conf
 COPY nginx.conf /etc/nginx/conf.d/default.conf
-RUN mkdir -p /usr/share/nginx/html/ui
-COPY ui/ /usr/share/nginx/html/ui/
+RUN mkdir -p /var/www/ui
+COPY ui/ /var/www/ui/
 EXPOSE 80
